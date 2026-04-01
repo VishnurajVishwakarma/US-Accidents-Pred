@@ -105,7 +105,19 @@ window.findRoute = function() {
     
     document.getElementById('route-results').innerHTML = `
         <div class="empty-state">
-            <p>Evaluating routes using Machine Learning Safety models...</p>
+            <h4 style="margin-top: 0; color: #1a73e8;">Processing Machine Learning Routes</h4>
+            <div style="font-size: 13px; color: #555; text-align: left; padding: 10px; background: #f0f4f8; border-radius: 6px; margin-top: 10px;">
+                <p style="margin: 0 0 5px 0;"><b>Status:</b> Initializing inference query...</p>
+                <div style="font-size: 11px; margin-top: 8px;">
+                    <i>Detailed Operations:</i>
+                    <ul style="margin: 5px 0; padding-left: 15px; color: #444;">
+                        <li>Calculating geometry permutations via OpenStreetMap routing servers.</li>
+                        <li>Extracting coordinate batches and building predictive feature matrices.</li>
+                        <li>Awaiting response from Flask backend predict() API.</li>
+                        <li style="color: #cf1322;"><b>Note:</b> Serverless cold starts (Vercel/Render) may take 10-15 seconds to load the 280MB model into memory. Please wait...</li>
+                    </ul>
+                </div>
+            </div>
         </div>`;
         
     // Clear previous custom lines
