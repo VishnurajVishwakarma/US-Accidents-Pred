@@ -17,6 +17,21 @@ SCALER_PATH = os.path.join(BASE_DIR, "models/scaler.pkl")
 ENCODER_PATH = os.path.join(BASE_DIR, "models/label_encoders.pkl")
 FEAT_COLS_PATH = os.path.join(BASE_DIR, "models/feature_columns.pkl")
 
+import tempfile
+
+if not os.path.exists(MODEL_PATH):
+    # Try reconstructing from chunks if they exist
+    part_files = sorted([f for f in os.listdir(os.path.join(BASE_DIR, "models")) if f.startswith("part_")])
+    if part_files:
+        print("Reconstructing model from chunks...")
+        tmp_model_path = os.path.join(tempfile.gettempdir(), "accident_model.pkl")
+        if not os.path.exists(tmp_model_path):
+            with open(tmp_model_path, "wb") as outfile:
+                for part in part_files:
+                    with open(os.path.join(BASE_DIR, "models", part), "rb") as infile:
+                        outfile.write(infile.read())
+        MODEL_PATH = tmp_model_path
+
 if os.path.exists(MODEL_PATH):
     model = joblib.load(MODEL_PATH)
     scaler = joblib.load(SCALER_PATH)

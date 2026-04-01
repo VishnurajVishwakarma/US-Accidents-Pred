@@ -13,8 +13,8 @@ venv/
 env/
 
 # Models
-# Models have been deliberately tracked (requires Git LFS due to size) to ensure 
-# they are built during Vercel/Render deployments. Add models/*.pkl back here if testing locally.
+models/*.pkl
+!models/part_*
 
 # Environment
 .env
