@@ -66,3 +66,4 @@ This application is structurally engineered to be deployed securely onto **Verce
 ## License
 MIT License. Open-source and Free to use.
 # US-Accidents-Pred
+# US-Accidents-Pred
