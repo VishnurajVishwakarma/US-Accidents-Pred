@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SafeRoute AI</title>
+    
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.fullscreen/Control.FullScreen.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet-routing-machine/dist/leaflet-routing-machine.css" />
+    
+    <!-- Inter Font -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="style.css">
+    
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/leaflet.heat/dist/leaflet-heat.js"></script>
+    <script src="https://unpkg.com/leaflet-routing-machine/dist/leaflet-routing-machine.js"></script>
+    <script src="https://unpkg.com/leaflet.fullscreen/Control.FullScreen.js"></script>
+</head>
+<body>
+
+    <div id="app-container">
+        <!-- Sidebar overlay like Google Maps -->
+        <div id="sidebar">
+            <div class="header">
+                <h2>&#128663; SafeRoute AI</h2>
+                <p>ML-Powered Navigation</p>
+            </div>
+            
+            <div class="search-section">
+                <!-- Source Input -->
+                <div class="input-wrapper">
+                    <span class="icon start-icon"></span>
+                    <input type="text" id="start-input" placeholder="Choose starting point" autocomplete="off">
+                    <div id="start-suggestions" class="suggestions-box"></div>
+                </div>
+                
+                <!-- Destination Input -->
+                <div class="input-wrapper">
+                    <span class="icon end-icon"></span>
+                    <input type="text" id="end-input" placeholder="Choose destination" autocomplete="off">
+                    <div id="end-suggestions" class="suggestions-box"></div>
+                </div>
+                
+                <button id="find-route-btn" onclick="findRoute()">
+                    Search Safe Route
+                </button>
+            </div>
+
+            <!-- Route Results Container -->
+            <div id="route-results">
+                <!-- Javascript will populate alternative routes here -->
+                <div class="empty-state">
+                    <p>Enter a starting point and destination above to calculate ML-verified safe routes.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Fullscreen Map -->
+        <div id="map"></div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
