@@ -10,6 +10,15 @@ SafeRoute AI is an end-to-end Machine Learning navigation system built to identi
 * **Risk Heatmap**: Visualize accident-prone regions dynamically overlaid on the map.
 * **ML Route Evaluation**: Instead of just calculating the shortest path, the system calculates multiple permutations of routes, tests them against a Random Forest classification model, and factors in `Cost = Distance + (Severity * Weight)` to highlight the inherently safest route in vibrant green. 
 
+## Flow of the Program
+1. **User Input:** The user types their source and destination in the frontend. 
+2. **Geocoding:** The native search bar queries the Nominatim API to get coordinates for the selected locations.
+3. **Route Generation:** The `Leaflet Routing Machine` queries a routing server to find possible route permutations between the start and end coordinates.
+4. **Data Sampling:** The frontend scripts sample coordinates along each route and send a sequence of waypoints to the Flask backend's `/predict` API.
+5. **Model Evaluation:** The Flask application feeds the coordinates and current environmental details into the pre-trained `RandomForest` machine learning model.
+6. **Continuous Scoring:** The backend uses `.predict_proba()` to evaluate probabilities of accident severity, calculating a highly precise continuous expected severity score for each waypoint. The average score for the entire route is calculated.
+7. **Safest Path Selection:** The frontend compares the overall predicted severity across all permutations and ranks the safest route on the map in a prominent layout.
+
 ## Tech Stack
 * **Frontend**: HTML5, Vanilla JavaScript, CSS3, Leaflet.js, Leaflet Routing Machine.
 * **Backend**: Python, Flask, Flask-CORS.
@@ -39,29 +48,33 @@ python src/train.py "data/Your_New_Data.csv"
 ### 3. Running the Server
 Launch the Flask application bridging the backend ML to the frontend UI:
 ```bash
-
+python app.py
 ```
 Visit `http://localhost:5000` in your browser.
 
 ---
 
-## Vercel Production Deployment
+## Production Deployment (Important)
 
-This application is structurally engineered to be deployed securely onto **Vercel's** serverless hosting environment.
+### The Large File Issue
+Machine learning models (such as `accident_model.pkl` at roughly ~284MB) are too substantial to be tracked on GitHub out-of-the-box. We have untracked `models/*.pkl` from `.gitignore` so they register with Git. 
 
-### Prerequisites:
-1. Initialize a Git repository and push this code to GitHub.
-2. Create an account on [Vercel](https://vercel.com).
+**Because the model is over 100MB, you MUST use [Git LFS](https://git-lfs.com/) (Large File Storage) to push this repository to GitHub:**
+```bash
+git lfs install
+git lfs track "models/*.pkl"
+git add .gitattributes models/*.pkl
+git commit -m "Add ML models via LFS"
+git push
+```
 
-### Deployment Steps:
-1. Log into Vercel and select **"Add New Project"**.
-2. Import the SafeRoute AI GitHub repository.
-3. Vercel will automatically detect the `vercel.json` configuration provided in the root directory.
-4. Keep the framework preset to `Other`. 
-5. Click **Deploy**. Vercel will process the serverless functions via `@vercel/python` and statically host the `frontend/` directory.
-
-### Important Note on Vercel Serverless ML Limits:
-*Vercel's free tier imposes a 50MB execution limit and a 250MB total uncompressed size limit for Serverless Functions. Since Scikit-Learn, Pandas, and the 30MB `.pkl` model are extremely heavy, deployment on Vercel may occasionally exceed this limit during the build phase depending on your exact dependency tree. If you encounter a `Max Serverless Function Size Exceeded` error on Vercel, it is highly recommended to deploy the backend (`app.py`) separately via **Render** (which natively supports heavy Python binaries), while retaining Vercel exclusively for the static `/frontend` architecture.*
+### Vercel vs Render
+- **Vercel** is extremely limited for heavy Python servers (250MB size limit for serverless functions). If you push the 284MB model file here, you will hit a `Max Serverless Function Size Exceeded` error and the `/predict` API will drop requests, causing the map search to break.
+- **Render** natively supports heavier Python dependencies. **We highly recommend deploying the Flask App via Render:**
+  1. Login to Render and connect your GitHub repository.
+  2. Create a **Web Service**.
+  3. Environment: `Python 3`. Build Command: `pip install -r requirements.txt`. Start Command: `gunicorn app:app`.
+  4. Render will handle the heavy model file correctly.
 
 ## License
 MIT License. Open-source and Free to use.

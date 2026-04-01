@@ -96,12 +96,28 @@ def predict():
     else:
         df[:] = scaler.transform(df)
         
-    predictions = model.predict(df)
-    
-    if isinstance(data, list):
-        return jsonify({"severities": [int(p) for p in predictions]})
-    else:
-        return jsonify({"severity": int(predictions[0])})
+    try:
+        # Generate probabilities to create a more precise continuous score.
+        probabilities = model.predict_proba(df)
+        classes = model.classes_
+        
+        expected_values = []
+        for prob in probabilities:
+            # Expected value = sum of (probability * class_value)
+            ev = sum(p * float(c) for p, c in zip(prob, classes))
+            expected_values.append(ev)
+            
+        if isinstance(data, list):
+            return jsonify({"severities": expected_values})
+        else:
+            return jsonify({"severity": expected_values[0]})
+    except Exception as e:
+        # Fallback to discrete class prediction if predict_proba is unsupported
+        predictions = model.predict(df)
+        if isinstance(data, list):
+            return jsonify({"severities": [float(p) for p in predictions]})
+        else:
+            return jsonify({"severity": float(predictions[0])})
 
 if __name__ == "__main__":
     app.run(debug=True, port=5000)
