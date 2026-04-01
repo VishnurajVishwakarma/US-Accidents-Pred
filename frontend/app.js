@@ -121,6 +121,7 @@ routingControl.on('routesfound', async function(e) {
     resultsDiv.innerHTML = '';
     
     let evaluatedRoutes = [];
+    let errorsEncountered = [];
     
     // Evaluate all routes through ML API
     for (let i = 0; i < routes.length; i++) {
@@ -128,14 +129,24 @@ routingControl.on('routesfound', async function(e) {
         let coords = route.coordinates;
         
         let sampled = [];
-        let step = Math.max(1, Math.floor(coords.length / 20));
+        let step = Math.max(1, Math.floor(coords.length / 20)); // downsample coordinate density
         for(let j=0; j<coords.length; j+=step) {
             sampled.push({ Start_Lat: coords[j].lat, Start_Lng: coords[j].lng });
         }
         
         try {
             let req = await fetch('/predict', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(sampled) });
+            
+            if (!req.ok) {
+                let errorText = await req.text();
+                throw new Error(`[Status ${req.status}] ${errorText}`);
+            }
+            
             let result = await req.json();
+            
+            if (!result.severities || result.severities.length === 0) {
+                 throw new Error(`Invalid response format from /predict`);
+            }
             
             let avgSeverity = result.severities.reduce((a, b) => a + b, 0) / result.severities.length;
             let penaltyWeight = 10000;
@@ -150,8 +161,23 @@ routingControl.on('routesfound', async function(e) {
                 time: Math.round(route.summary.totalTime / 60) + ' min'
             });
         } catch (err) {
-            console.error(err);
+            console.error(`Route ${i+1} Evaluation Error:`, err);
+            errorsEncountered.push(`Route ${i+1} Failed: ${err.message}`);
         }
+    }
+    
+    if (evaluatedRoutes.length === 0) {
+        resultsDiv.innerHTML = `
+            <div class="empty-state" style="border: 1px solid #ff4d4f; background-color: #fff1f0; padding: 15px; border-radius: 8px;">
+                <h4 style="color: #cf1322; margin-top: 0;">Server Error Processing Routes</h4>
+                <p style="font-size: 13px; color: #5c0011;">The ML backend failed to evaluate the paths.</p>
+                <div style="font-size: 11px; background: rgba(0,0,0,0.05); padding: 5px; text-align: left; overflow-x: auto; white-space: pre-wrap;">
+                    ${errorsEncountered.join('<br>')}
+                </div>
+                <p style="font-size: 12px; margin-top:10px;"><b>Common Vercel issues:</b> 504 Gateway Timeout (model took too long to load), Serverless size limit exceeded, or App logic crash. Check Vercel Logs for root cause.</p>
+            </div>
+        `;
+        return;
     }
     
     // Find shortest route by distance
