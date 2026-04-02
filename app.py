@@ -17,14 +17,29 @@ SCALER_PATH = os.path.join(BASE_DIR, "models/scaler.pkl")
 ENCODER_PATH = os.path.join(BASE_DIR, "models/label_encoders.pkl")
 FEAT_COLS_PATH = os.path.join(BASE_DIR, "models/feature_columns.pkl")
 
-if os.path.exists(MODEL_PATH):
-    model = joblib.load(MODEL_PATH)
-    scaler = joblib.load(SCALER_PATH)
-    le_dict = joblib.load(ENCODER_PATH)
-    feature_columns = joblib.load(FEAT_COLS_PATH)
-else:
-    model, scaler, le_dict, feature_columns = None, None, None, None
-    print("Warning: Model files not found. Run training script first.")
+print("🚀 Starting Safe Route API...")
+
+model, scaler, le_dict, feature_columns = None, None, None, None
+
+def load_model():
+    global model, scaler, le_dict, feature_columns
+    
+    if model is None:
+        if os.path.exists(MODEL_PATH):
+            print("Loading model...")
+            model = joblib.load(MODEL_PATH)
+            scaler = joblib.load(SCALER_PATH)
+            le_dict = joblib.load(ENCODER_PATH)
+            feature_columns = joblib.load(FEAT_COLS_PATH)
+        else:
+            print("Model not found yet.")
+
+@app.route("/health")
+def health():
+    return jsonify({
+        "status": "ok",
+        "model_loaded": model is not None
+    })
 
 @app.route("/")
 def serve_index():
@@ -44,8 +59,13 @@ def serve_heatmap():
 
 @app.route("/predict", methods=["POST"])
 def predict():
-    if not model:
-        return jsonify({"error": "Model not loaded"}), 500
+    load_model()  # ensure model is loaded
+    
+    if model is None:
+        return jsonify({"error": "Model not loaded yet"}), 503
+        
+    if scaler is None or le_dict is None:
+        return jsonify({"error": "Preprocessing files missing"}), 500
         
     data = request.json
     

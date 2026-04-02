@@ -23,6 +23,10 @@ def get_file_id(name):
 os.makedirs("models", exist_ok=True)
 
 for file_name in FILES_TO_SYNC:
+    if os.path.exists(f"models/{file_name}"):
+        print(f"{file_name} already exists locally. Skipping download.")
+        continue
+
     file_id = get_file_id(file_name)
     if file_id:
         request = service.files().get_media(fileId=file_id)
