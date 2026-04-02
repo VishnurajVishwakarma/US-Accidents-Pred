@@ -2,47 +2,31 @@ name: Online Learning Pipeline
 
 on:
   schedule:
-    - cron: '0 */6 * * *' # Every 6 hours
-  workflow_dispatch: # Allow manual trigger
+    - cron: '0 */6 * * *'
+  workflow_dispatch:
 
 jobs:
   train:
     runs-on: ubuntu-latest
-    steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v3
 
-      - name: Set up Python
-        uses: actions/setup-python@v4
+    steps:
+      - uses: actions/checkout@v3
+
+      - uses: actions/setup-python@v4
         with:
           python-version: '3.9'
 
       - name: Install dependencies
-        run: |
-          pip install --upgrade pip
-          pip install -r requirements.txt
+        run: pip install -r requirements.txt
 
       - name: Inject GCP Credentials
         run: echo '${{ secrets.GCP_SA_KEY }}' > gcp-key.json
 
-      - name: Execute Online Learning
+      - name: Download Model
+        run: python src/download_from_drive.py
+
+      - name: Train Model
         run: python src/online_train.py
 
-      - name: Chunk Model and Update Remote
-        run: |
-          cd models
-          # Delete old chunks
-          rm -f part_*
-          
-          # Repartition the massive newly-trained model
-          split -b 90m accident_model.pkl part_
-          cd ..
-          
-          # Git configuration
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          
-          # Commit the rebuilt chunks back to the repo, triggering Vercel CI
-          git add models/part_*
-          git commit -m "🤖 Automata: Online Learning Update (Model Chunks)" || echo "No changes to commit"
-          git push
+      - name: Upload Model
+        run: python src/upload_to_drive.py
