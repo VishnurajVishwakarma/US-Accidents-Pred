@@ -3,13 +3,26 @@ from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseDownload
 import io
 import os
+import sys
 
 SCOPES = ['https://www.googleapis.com/auth/drive']
 FOLDER_ID = '1bM_YxY-A1sGDzlzQdLfHTNjEgEObCddu'
 FILES_TO_SYNC = ["accident_model.pkl", "progress.json"]
 
-creds = service_account.Credentials.from_service_account_file(
-    'gcp-key.json', scopes=SCOPES)
+try:
+    if "GCP_SA_KEY" in os.environ:
+        import json
+        creds_json = json.loads(os.environ["GCP_SA_KEY"])
+        creds = service_account.Credentials.from_service_account_info(creds_json, scopes=SCOPES)
+    elif os.path.exists('gcp-key.json'):
+        creds = service_account.Credentials.from_service_account_file('gcp-key.json', scopes=SCOPES)
+    else:
+        print("⚠️ No GCP credentials found! Skipping download.")
+        sys.exit(0)
+except Exception as e:
+    print(f"❌ Failed to parse GCP credentials: {e}")
+    sys.exit(0)  # Exit safely so Gunicorn still boots
+
 service = build('drive', 'v3', credentials=creds)
 
 def get_file_id(name):
