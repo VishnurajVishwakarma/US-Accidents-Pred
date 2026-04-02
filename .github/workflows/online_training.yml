@@ -16,17 +16,32 @@ jobs:
         with:
           python-version: '3.9'
 
+      - uses: actions/cache@v3
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+
       - name: Install dependencies
         run: pip install -r requirements.txt
 
       - name: Inject GCP Credentials
-        run: echo '${{ secrets.GCP_SA_KEY }}' > gcp-key.json
+        # Use a more resilient injection approach
+        run: |
+          cat << 'EOF' > gcp-key.json
+          ${{ secrets.GCP_SA_KEY }}
+          EOF
 
-      - name: Download Model
-        run: python src/download_from_drive.py
+      - name: Create models directory
+        run: mkdir -p models
+
+      - name: Download Model and Progress
+        run: python src/download_from_drive.py || echo "No model found"
 
       - name: Train Model
         run: python src/online_train.py
 
-      - name: Upload Model
+      - name: Upload Model and Progress
         run: python src/upload_to_drive.py
+
+      - name: Log Run
+        run: echo "Run completed at $(date)" >> training.log
