@@ -3,153 +3,258 @@ import numpy as np
 import joblib
 import os
 import json
+import sys
+import warnings
+warnings.filterwarnings('ignore')
+
 from sklearn.preprocessing import LabelEncoder, StandardScaler
 from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import accuracy_score, classification_report
-import warnings
-warnings.filterwarnings('ignore')
 
-import sys
 
-def load_dataset(fallback_path):
-    try:
-        print("🔄 Trying KaggleHub...")
-        import kagglehub
-        from kagglehub import KaggleDatasetAdapter
+# =========================================================
+# 📥 DOWNLOAD DATASET (KAGGLE CLI)
+# =========================================================
+def download_dataset():
+    dataset_path = "dataset/US_Accidents_March23.csv"
 
-        df = kagglehub.load_dataset(
-            KaggleDatasetAdapter.PANDAS,
-            "sobhanmoosavi/us-accidents",
-            "US_Accidents_March23.csv"
-        )
+    if os.path.exists(dataset_path):
+        print("✅ Dataset already exists")
+        return dataset_path
 
-        print("✅ Loaded using KaggleHub")
-        return df
+    print("📥 Dataset not found. Downloading from Kaggle...")
 
-    except Exception as e:
-        print("⚠️ KaggleHub failed:", e)
-        print("🔄 Switching to CSV fallback...")
+    os.makedirs("dataset", exist_ok=True)
 
-        chunk_size = 100000
-        chunks = []
+    exit_code = os.system(
+        "kaggle datasets download -d sobhanmoosavi/us-accidents -p dataset --unzip"
+    )
 
-        for chunk in pd.read_csv(
-            fallback_path,
-            chunksize=chunk_size,
-            low_memory=False
-        ):
-            chunks.append(chunk)
+    if exit_code != 0:
+        raise RuntimeError("❌ Kaggle download failed. Check API setup.")
 
-        df = pd.concat(chunks, ignore_index=True)
+    if not os.path.exists(dataset_path):
+        raise FileNotFoundError("❌ Dataset not found after download")
 
-        print("✅ Loaded using CSV fallback")
-        return df
+    print("✅ Dataset downloaded successfully")
+    return dataset_path
 
-def main():
-    if len(sys.argv) > 1:
-        data_path = sys.argv[1]
-    else:
-        data_path = "data/US_Accidents.csv"
-        if not os.path.exists(data_path) and os.path.exists("../data/US_Accidents.csv"):
-            data_path = "../data/US_Accidents.csv"
-            
-    # 🔥 Use it
-    df = load_dataset(data_path)
-        
-    print(f"Data shape after loading: {df.shape}")
 
-    # Save a heatmap sample before cleaning corrupts original lats/longs
-    print("Generating heatmap sample...")
-    os.makedirs("data", exist_ok=True)
-    heatmap_sample = df[['Start_Lat', 'Start_Lng', 'Severity']].dropna().sample(min(3000, len(df))).to_dict(orient='records')
-    with open('data/heatmap_sample.json', 'w') as f:
-        json.dump(heatmap_sample, f)
+# =========================================================
+# 📥 LOAD DATASET (ENCODING SAFE)
+# =========================================================
+def load_dataset(path):
+    print("📥 Loading dataset safely with chunks...")
 
-    print("Cleaning data...")
-    # Drop irrelevant columns
+    encodings = ['utf-8', 'utf-8-sig', 'latin1', 'cp1252']
+    chunk_size = 100000  # adjust if needed
+
+    for enc in encodings:
+        try:
+            print(f"🔄 Trying encoding: {enc}")
+
+            chunks = []
+
+            for i, chunk in enumerate(pd.read_csv(
+                path,
+                encoding=enc,
+                chunksize=chunk_size,
+                on_bad_lines='skip',
+                engine='python'  # more tolerant
+            )):
+                print(f"Loaded chunk {i+1}")
+                chunks.append(chunk)
+
+            df = pd.concat(chunks, ignore_index=True)
+
+            print(f"Success with encoding: {enc}")
+            print(f"Final Shape: {df.shape}")
+
+            return df
+
+        except Exception as e:
+            print(f"Failed with {enc}: {e}")
+
+    raise RuntimeError("All encoding attempts failed")
+
+
+# =========================================================
+# 🧹 DATA CLEANING
+# =========================================================
+def clean_data(df):
+    print("🧹 Cleaning data...")
+
     drop_cols = ["ID", "Source", "Description", "Distance(mi)", "End_Lat", "End_Lng"]
     df.drop(columns=drop_cols, inplace=True, errors='ignore')
-    
-    # Handle missing values
+
     df.drop(columns=["Wind_Chill(F)", "Precipitation(in)"], inplace=True, errors='ignore')
-    
-    # Fill remaining nulls
+
     df.ffill(inplace=True)
-    df.bfill(inplace=True) 
-    
-    # Drop duplicates
+    df.bfill(inplace=True)
+
     df.drop_duplicates(inplace=True)
-    
-    # Fix Data Types
-    print("Feature engineering...")
-    df["Start_Time"] = pd.to_datetime(df["Start_Time"], format='mixed', errors='coerce')
-    df["End_Time"] = pd.to_datetime(df["End_Time"], format='mixed', errors='coerce')
-    
+
+    return df
+
+
+# =========================================================
+# ⚙️ FEATURE ENGINEERING
+# =========================================================
+def feature_engineering(df):
+    print("⚙️ Feature engineering...")
+
+    df["Start_Time"] = pd.to_datetime(df["Start_Time"], errors='coerce')
+    df["End_Time"] = pd.to_datetime(df["End_Time"], errors='coerce')
+
     df.dropna(subset=['Start_Time', 'End_Time'], inplace=True)
-    
-    # Extract time features
+
     df["hour"] = df["Start_Time"].dt.hour
     df["day"] = df["Start_Time"].dt.day
     df["month"] = df["Start_Time"].dt.month
     df["year"] = df["Start_Time"].dt.year
     df["duration"] = (df["End_Time"] - df["Start_Time"]).dt.total_seconds()
-    
-    # Drop original time cols
+
     df.drop(columns=["Start_Time", "End_Time", "Weather_Timestamp"], inplace=True, errors='ignore')
-    
-    # Encode categorical variables
-    print("Encoding categorical variables...")
+
+    return df
+
+
+# =========================================================
+# 🔤 ENCODING
+# =========================================================
+def encode_data(df):
+    print("🔤 Encoding...")
+
     le_dict = {}
-    cat_cols = df.select_dtypes(include='object').columns
-    
-    for col in cat_cols:
+
+    for col in df.select_dtypes(include='object').columns:
         le = LabelEncoder()
-        # Convert to string to avoid mixed type errors
         df[col] = le.fit_transform(df[col].astype(str))
         le_dict[col] = le
-        
-    # Also encode boolean cols if any
-    bool_cols = df.select_dtypes(include='bool').columns
-    for col in bool_cols:
+
+    for col in df.select_dtypes(include='bool').columns:
         df[col] = df[col].astype(int)
-        
-    # Scale numerical
-    print("Scaling features...")
+
+    return df, le_dict
+
+
+# =========================================================
+# 📊 SCALING
+# =========================================================
+def scale_data(df):
+    print("📊 Scaling...")
+
     scaler = StandardScaler()
-    # exclude Severity from scaling
-    num_cols = df.select_dtypes(include=['int64', 'float64', 'int32']).columns.drop("Severity", errors='ignore')
-    
-    # Ensure column order is saved for inference
+
+    num_cols = df.select_dtypes(include=['int64', 'float64', 'int32']).columns
+    num_cols = num_cols.drop("Severity", errors='ignore')
+
     feature_columns = list(df.drop("Severity", axis=1).columns)
-    
+
     df[num_cols] = scaler.fit_transform(df[num_cols])
-    
-    # Split
-    print("Splitting data...")
+
+    return df, scaler, feature_columns
+
+
+# =========================================================
+# 🌲 TRAIN MODEL
+# =========================================================
+def train_model(df):
+    print("🌲 Training model...")
+
     X = df.drop("Severity", axis=1)
     y = df["Severity"]
-    
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
-    
-    print("Training Random Forest...")
-    model = RandomForestClassifier(n_estimators=100, max_depth=15, random_state=42, n_jobs=-1)
+
+    X_train, X_test, y_train, y_test = train_test_split(
+        X, y, test_size=0.2, random_state=42
+    )
+
+    model = RandomForestClassifier(
+        n_estimators=100,
+        max_depth=15,
+        n_jobs=-1,
+        random_state=42
+    )
+
     model.fit(X_train, y_train)
-    
-    print("Evaluating...")
+
     y_pred = model.predict(X_test)
-    print("Accuracy:", accuracy_score(y_test, y_pred))
+
+    print("📈 Accuracy:", accuracy_score(y_test, y_pred))
     print(classification_report(y_test, y_pred))
-    
-    # Save model
+
+    return model
+
+
+# =========================================================
+# 💾 SAVE ARTIFACTS
+# =========================================================
+def save_artifacts(model, scaler, le_dict, feature_columns):
+    print("💾 Saving artifacts...")
+
     os.makedirs("models", exist_ok=True)
-    print("Saving model and preprocessors...")
+
     joblib.dump(model, "models/accident_model.pkl")
     joblib.dump(scaler, "models/scaler.pkl")
     joblib.dump(le_dict, "models/label_encoders.pkl")
     joblib.dump(feature_columns, "models/feature_columns.pkl")
-    
-    print("Done!")
 
+
+# =========================================================
+# 🌍 HEATMAP SAMPLE
+# =========================================================
+def generate_heatmap(df):
+    print("🌍 Generating heatmap...")
+
+    os.makedirs("data", exist_ok=True)
+
+    sample = df[['Start_Lat', 'Start_Lng', 'Severity']] \
+        .dropna() \
+        .sample(min(3000, len(df))) \
+        .to_dict(orient='records')
+
+    with open('data/heatmap_sample.json', 'w') as f:
+        json.dump(sample, f)
+
+
+# =========================================================
+# 🚀 MAIN
+# =========================================================
+def main():
+
+    # Step 1: Download dataset if missing
+    dataset_path = download_dataset()
+
+    # Step 2: Load data
+    df = load_dataset(dataset_path)
+
+    # Step 3: Heatmap
+    generate_heatmap(df)
+
+    # Step 4: Clean
+    df = clean_data(df)
+
+    # Step 5: Feature engineering
+    df = feature_engineering(df)
+
+    # Step 6: Encode
+    df, le_dict = encode_data(df)
+
+    # Step 7: Scale
+    df, scaler, feature_columns = scale_data(df)
+
+    # Step 8: Train
+    model = train_model(df)
+
+    # Step 9: Save
+    save_artifacts(model, scaler, le_dict, feature_columns)
+
+    print("✅ PIPELINE COMPLETE")
+
+
+# =========================================================
+# ▶️ ENTRY
+# =========================================================
 if __name__ == "__main__":
     main()

@@ -41,7 +41,7 @@ pip install -r requirements.txt
 ### 2. Model Training (Optional)
 If you wish to retrain the model on new data, execute the training pipeline.
 ```bash
-python src/train.py "data/Your_New_Data.csv"
+python src/train.py 
 ```
 *Note: This generates `accident_model.pkl` and preprocessing configurations in the `/models/` directory.*
 
